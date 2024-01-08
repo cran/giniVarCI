@@ -1,0 +1,3 @@
+importFrom(Rcpp, evalCpp)
+useDynLib(giniVarCI, .registration = TRUE)
+export(gsample, iginindex, igini, icompareCI, fginindex, fgini, fcompareCI, gpareto, glnorm, gdagum, gchisq, ggamma, gunif, gweibull, gfisk, gbeta, gf, gparetoI, gparetoII, gparetoIII, gparetoIV, gburr, ggompertz, gfrechet)

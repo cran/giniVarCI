@@ -1,0 +1,728 @@
+---
+title: "Description of methods for estimating Gini indexes, variance estimates and confidence intervals using **GiniVarInterval**"
+output: 
+  rmarkdown::html_vignette:
+   toc: yes
+   toc_depth: 3
+   number_sections: true
+vignette: >
+  %\VignetteIndexEntry{GiniVarInterval}
+  %\VignetteEncoding{UTF-8}
+  %\VignetteEngine{knitr::rmarkdown}
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+The aim of this vignette is to describe the various methods for estimating 
+the Gini index, for both infinite and finite populations, as well as the
+methods for estimating its variance, as implemented in the **giniVarCI** package. 
+Different confidence intervals for the Gini index are also explained.
+
+To exemplify the use of the different functions, we assume that inequality is 
+measured for a nonnegative and continuous random variable $Y$. A popular 
+formulation of the Gini index ($G$) is defined by (see David, 1968; Kendall and 
+Stuart, 1977; Qin et al., 2010):
+$$
+G = \frac{1}{2 \mu_{Y}} \int_{0}^{+\infty} \int_{0}^{+\infty} |x-y|dF_{Y}(x)dF_{Y}(y),
+$$ where
+$$\mu_{Y}=E[Y]=\int_{0}^{+\infty}yf(y)dy=\int_{0}^{+\infty}ydF_{Y}(y),$$
+is the mean of $Y$, and $F_{Y}(y)=P(Y\leq y)$ and $f(y)$ are the cumulative distribution function and the probability density function of $Y$, respectively. 
+
+In practice, the value of $G$ is estimated by means of
+a sample $S$ with size $n$, which can be selected from either
+infinite or finite populations (Berger and Gedik Balay, 2020; Muñoz et
+al., 2023).
+
+
+# Infinite populations
+
+## Estimators of the Gini index
+
+For infinite populations, $\{Y_{i}: i\in S\}$ denotes a sequence, with
+size $n$, of nonnegative random variables with the same distribution as
+the variable of interest $Y$. The Gini index ($G$) is estimated using
+the observation of individuals selected in the sample, which are
+denoted as $\{y_{i}: i\in S\}$. A popular estimator of the Gini index is
+(see Langel and Tille, 2013; Giorgi and Gigliarano, 2017; Muñoz et al.,
+2023):
+$$\widehat{G} = \displaystyle \frac{2}{\overline{y}n^2}\sum_{i \in S}iy_{(i)} - \frac{n+1}{n}, $$
+where $\overline{y}=n^{-1}\sum_{i=1}^{n}y_i$, and $y_{(i)}$ are the ordered values (in non-decreasing order) of the sample observations $y_i$. This is the expression computed by the functions *iginindex()* (`method = 5`) and *igini()* when `bias.correction = FALSE`. 
+
+The estimator $\widehat{G}$ can be biased for small sample sizes (Deltas, 2003). 
+The bias corrected (*bc*) version of $\widehat{G}$ is:
+$$\widehat{G}^{bc} = \displaystyle \frac{2}{\overline{y}n(n-1)}\sum_{i \in S}iy_{(i)} - \frac{n+1}{n-1},$$
+which corresponds to the Gini index bias correction version computed by *iginindex()* (`method = 5`) and *igini()* when `bias.correction = TRUE`.
+
+In the first example, a sample with size `n=100` is generated using the *gsample()* 
+function from the standard logNormal distribution (`distribution = "lognormal"`)
+with true Gini index is $G=0.5$ (`gini = 0.5`) and the Gini index is estimated 
+using bias correction.
+
+```{r}
+library(giniVarCI)
+set.seed(123)
+y <- gsample(n = 100, gini = 0.5, distribution = "lognormal")
+igini(y)
+
+```
+
+
+*iginindex()* can be used to estimate the Gini index using various
+estimation methods and both **R** and **C++** codes. See `help(iginindex)`
+for a detailed description of the various estimation methods. Efficiency
+comparisons between both implementations and with other functions available in
+other packages, such as **laeken**, **DescTools**, **ineq** or
+**REAT**, can be made using, for instance, the function
+*microbenchmark()*:
+
+```{r}
+
+
+#Comparing the computation time for the various estimation methods using R 
+microbenchmark::microbenchmark(
+iginindex(y, method = 1,  useRcpp = FALSE),
+iginindex(y, method = 2,  useRcpp = FALSE),
+iginindex(y, method = 3,  useRcpp = FALSE),
+iginindex(y, method = 4,  useRcpp = FALSE),
+iginindex(y, method = 5,  useRcpp = FALSE),
+iginindex(y, method = 6,  useRcpp = FALSE),
+iginindex(y, method = 7,  useRcpp = FALSE),
+iginindex(y, method = 8,  useRcpp = FALSE),
+iginindex(y, method = 9,  useRcpp = FALSE),
+iginindex(y, method = 10, useRcpp = FALSE) 
+)
+
+
+# Comparing the computation time for the various estimation methods using Rcpp
+microbenchmark::microbenchmark(
+iginindex(y, method = 1),
+iginindex(y, method = 2),
+iginindex(y, method = 3),
+iginindex(y, method = 4),
+iginindex(y, method = 5),
+iginindex(y, method = 6),
+iginindex(y, method = 7),
+iginindex(y, method = 8),
+iginindex(y, method = 9),
+iginindex(y, method = 10) )
+
+
+
+```
+
+
+
+
+```{r}
+
+
+# Comparing the computation time for estimates of the Gini index in various R packages.
+
+microbenchmark::microbenchmark(
+igini(y),
+laeken::gini(y),
+DescTools::Gini(y),
+ineq::Gini(y),
+REAT::gini(y))
+
+
+```
+
+## Variance estimation and confidence intervals
+
+
+Variance estimators and confidence intervals are described using different 
+methods for the estimator of the non-bias corrected version of Gini index 
+$\widehat{G}$, since as $$\widehat{G}^{bc} = \frac{n}{n-1}\widehat{G},$$
+the variance estimators and confidence intervals based on $\widehat{G}^{bc}$ can 
+be straightforwardly derived. In particular, 
+$$\widehat{V}(\widehat{G}^{bc})=\frac{n^2}{(n-1)^2}\widehat{V}(\widehat{G}).$$
+Let $[L,U]$ the lower and upper limits of a confidence interval for $G$ based on $\widehat{G}$. The confidence interval based on $\widehat{G}^{bc}$ can be computed as:
+$$ \left[ \frac{n}{n-1}L, \frac{n}{n-1}U\right].$$
+
+
+
+### Bootstrap
+
+The argument `interval = pbootstrap` in the function *igini()* returns the confidence 
+interval for the Gini index using the percentile bootstrap method. 
+Let $\{y_{1}^{*}(b),\ldots, y_{n}^{*}(b)\}$
+be the $b$th bootstrap sample taken from the original sample
+$\{y_{1},\ldots, y_{n}\}$ by simple random sampling with replacement,
+and $\widehat{G}^{*}(b)$ denotes the estimator $\widehat{G}$ computed from the
+$b$th bootstrap sample, with $b=\{1,\ldots,B\}$, being $B$ the total number of bootstrap samples. For a confidence level
+$1-\alpha$, the percentile bootstrap confidence interval is defined as
+(see Qin et al., 2010):
+$$\left[ \widehat{G}^{*}_{(\alpha/2)}, \widehat{G}^{*}_{(1-\alpha/2)}   \right],$$
+where $\widehat{G}^{*}_{(a)}$ is the $a$th quantile of the bootstrapped
+coefficients $\widehat{G}^{*}(b)$. A variance estimator of the Gini
+index based on bootstrap is defined as
+$$\widehat{V}_{B}(\widehat{G})= \displaystyle \frac{1}{B-1}\sum_{b=1}^{B}\left(\widehat{G}^{*}(b) - \overline{G}^{*} \right)^2,$$
+where $$\overline{G}^{*}=\frac{1}{B}\sum_{b=1}^{B}\widehat{G}^{*}(b).$$
+
+
+
+
+```{r}
+
+# Gini index estimation and confidence interval using 'pbootstrap',
+
+igini(y, interval = "pbootstrap")
+
+```
+
+
+`interval = "BCa"` computes the bias-corrected and accelerated bootstrap interval
+(Davison and Hinkley, 1997). The idea of this confidence interval is to
+correct for bias due to the skewness in the distribution of bootstrap
+estimates. The `"BCa"` confidence interval is defined as:
+$$\left[ \widehat{G}^{*}_{(\alpha_{1})}, \widehat{G}^{*}_{(\alpha_{2})}   \right],$$
+where
+$$\alpha_{1}=\phi\left( \widehat{Z}_{0} + \frac{\widehat{Z}_{0} + Z_{\alpha}}{1-\widehat{a} (\widehat{Z}_{0} + \widehat{Z}_{\alpha}) } \right),$$
+
+$$\alpha_{2}=\phi\left( \widehat{Z}_{0} + \frac{\widehat{Z}_{0} + Z_{1-\alpha}}{1-\widehat{a} (\widehat{Z}_{0} + \widehat{Z}_{1-\alpha}) } \right),$$
+$\phi(\cdot)$ is the cumulative distribution function of the
+standard Normal distribution, and $Z_{a}$ is the $a$th quantile of the standard Normal distribution. The bias-correction factor is defined as
+$$\widehat{Z}_{0}=\phi^{-1}\left(\#\frac{\widehat{G}^{*}(b) - \widehat{G}}{B}\right),$$
+and the acceleration factor is given by
+$$\widehat{a}=\frac{\sum_{i \in S}\left(\overline{G} -\widehat{G}_{-i}  \right)^3}{6\left\{\sum_{i \in S}\left(\overline{G} -\widehat{G}_{-i}  \right)^2\right\}^{3/2}},$$
+where $\widehat{G}_{-i}$ are the jackknife estimates defined in the
+following section, and
+$$\overline{G} = \frac{1}{n}\sum_{i \in S}\widehat{G}_{-i}.$$
+
+
+
+```{r}
+
+# Gini index estimation and confidence interval using 'Bca'.
+
+igini(y, interval = "BCa")
+
+```
+
+
+### Jackknife
+
+The `"zjackknife"` and `"tjackknife"` methods compute the variance of the
+Gini index using the Ogwang Jackknife procedure (Ogwang, 2000; Langel and Tille,
+2013). This variance si given by
+$$\widehat{V}_{J}(\widehat{G})= \displaystyle \frac{n-1}{n}\sum_{i \in S}\left(\widehat{G}_{-i}- \overline{G} \right)^2,$$
+where
+$$\widehat{G}_{-i}=\widehat{G}+\frac{2}{\sum_{j \in S}y_j - y_{(i)} }\left[ \frac{y_{(i)} \sum_{j \in S}jy_{(j)}}{n\sum_{j \in S}y_j}+\frac{\sum_{j \in S}jy_{(j)}}{n(n-1)} - \frac{\sum_{j \in S}y_j-\sum_{j=1}^{i}y_{(j)}  +iy_{(i)} }{n-1}   \right]-\frac{1}{n(n-1)}, $$
+with $i=\{1,\ldots,n\}$ being the jackknife estimates, i.e.,
+$\widehat{G}_{-i}$ is the estimation of the Gini index when the unit
+$i$ is removed from the sample. For a confidence level $1-\alpha$, the
+`"zjackknife"` confidence interval is defined as
+$$\left[\widehat{G} - Z_{1-\alpha/2}\sqrt{\widehat{V}_{J}(\widehat{G})},  \widehat{G} + Z_{1-\alpha/2}\sqrt{\widehat{V}_{J}(\widehat{G})}   \right],$$
+where $Z_{1-\alpha/2}$ is the $(1-\alpha/2)$th quantile of the standard Normal
+distribution. 
+
+
+
+
+```{r}
+
+# Gini index estimation and confidence interval using 'zjackknife'.
+
+igini(y, interval = "zjackknife")
+
+```
+
+
+`"tjackknife"` sustitutes the critical value
+$Z_{1-\alpha/2}$ by critical values computed from the studentized
+bootstrap. This confidence interval is given by\
+$$\left[\widehat{G} - t_{J;1-\alpha/2}^{*}\sqrt{\widehat{V}_{J}(\widehat{G})},  \widehat{G} - t_{J;\alpha/2}^{*}\sqrt{\widehat{V}_{J}(\widehat{G})}   \right],$$
+where $t_{J;a}^{*}$ is the $a$th quantile of the values
+$$ t^{*}_{J}(b)=\frac{\widehat{G}^{*}(b) - \widehat{G}}{\sqrt{\widehat{V}_{J}\left[\widehat{G}^{*}(b)\right]}}$$
+computed using the bootstrap technique, where $\widehat{V}_{J}\left[\widehat{G}^{*}(b)\right]$ is the estimated Ogwang Jackknife variance of $\widehat{G}^{*}(b)$ for the $b$th bootstrap sample. 
+
+
+
+
+```{r}
+
+# Gini index estimation and confidence interval using 'tjackknife'.
+
+igini(y, interval = "tjackknife")
+
+```
+
+
+
+### Linearization
+
+
+The linearization technique for variance estimation (Deville, 1999) has been applied to the following estimators of the Gini index:
+$$\widehat{G}^{a} = \displaystyle \frac{1}{2\overline{y}n^{2}}\sum_{i \in S}\sum_{j\in S} |y_i-y_j|$$
+and 
+$$\widehat{G}^{b}      = \displaystyle \frac{2}{\overline{y}n}\sum_{i \in S}y_{i}\widehat{F}_{n}(y_{i}) - 1,$$
+where 
+$$\widehat{F}_{n}(y_i)=\frac{1}{n}\sum_{j \in S}\delta(y_j \leq y_i)$$
+and $\delta(\cdot)$ is the indicator variable that takes the value 1 when its argument is true and 0 otherwise. For a given estimator $\widehat{G}$ and a linearizated variable $z$, the confidence interval, with confidence level $1-\alpha$, is defined as:   
+$$\left[\widehat{G} - Z_{1-\alpha/2}\sqrt{\widehat{V}_{L}(\widehat{G})},  \widehat{G} + Z_{1-\alpha/2}\sqrt{\widehat{V}_{L}(\widehat{G})}   \right],$$
+
+where the variance estimator of the Gini index is given by:
+$$\widehat{V}_{L}(\widehat{G})= \displaystyle \frac{1}{n(n-1)}\sum_{i \in S}\left(z_{i} - \overline{z}\right)^2,$$
+and $$\overline{z}=\frac{1}{n}\sum_{i \in S}z_{i}.$$
+
+
+On the one hand, `interval = "zalinearization"` linearizates the estimator $\widehat{G}^{a}$, and the corresponding pseudo-values are (see Langel anf Tillé 2013):
+
+$$z_{(i)}^{a}=\frac{1}{\overline{y}}\left[ \frac{2i}{n}\left( y_{(i)} - \widehat{\overline{Y}}_{(i)}\right) + \overline{y} -  y_{(i)} -  \widehat{G}^{a}\left(\overline{y} + y_{(i)}\right) \right],$$
+where 
+$$\widehat{\overline{Y}}_{(i)} = \displaystyle \frac{1}{i}\sum_{j = 1}^{i}y_{(j)}.$$
+
+On the other hand, `interval = "zblinearization"` linearizates the estimator $\widehat{G}^{b}$, and the corresponding pseudo values are (see Berger, 2008):
+
+$$z_i^{b}=\frac{1}{\overline{y}}\left[ 2y_i\widehat{F}_{n}(y_i) - (\widehat{G}^{b}+1)(y_i+\overline{y})+2\frac{\sum_{j \in S}y_j\delta(y_j \geq y_i)}{n}  \right].$$
+
+
+
+
+```{r}
+
+# Gini index estimation and confidence interval using 'zalinearization'.
+
+igini(y, interval = "zalinearization")
+
+
+
+# Gini index estimation and confidence interval using 'zblinearization'.
+
+igini(y, interval = "zblinearization")
+
+
+```
+
+
+Intervals `"talinearization"` and `"tblinearization"` substitute the critical value $Z_{1-\alpha/2}$ by
+critical values computed from the Studentized bootstrap. This confidence
+interval is given by\
+$$\left[\widehat{G} - t_{L;1-\alpha/2}^{*}\sqrt{\widehat{V}_{L}(\widehat{G})},  \widehat{G} - t_{L;\alpha/2}^{*}\sqrt{\widehat{V}_{L}(\widehat{G})}   \right],$$
+where $t_{L;a}^{*}$ is the $a$th quantile of the values
+$$ t^{*}_{L}(b)=\frac{\widehat{G}^{*}(b) - \widehat{G}}{\sqrt{\widehat{V}_{L}\left[\widehat{G}^{*}(b)\right]}}.$$
+$\widehat{V}_{L}(\cdot)$ is computed using the pseudo-values $z_{(i)}^{a}$ when `interval = "zalinearization"`, and using the pseudo-values $z_i^{b}$ when `interval = "zblinearization"`.
+
+
+
+```{r}
+
+# Gini index estimation and confidence interval using 'talinearization'.
+
+igini(y, interval = "talinearization")
+
+
+# Gini index estimation and confidence interval using 'tblinearization'.
+
+igini(y, interval = "tblinearization")
+
+
+```
+
+
+### Empirical likelihood
+
+Intervals `"ELchisq"` and `"ELboot"` compute the empirical likelihood ($EL$) method, a
+nonparametric technique that provides desirable inferences under
+skewed distributions. The shape of the $EL$ confidence intervals are
+determined by the data-driven likelihood ratio function (Owen, 2001).
+`interval = "ELchisq"` obtains the $EL$ confidence interval, with confidence level
+$1-\alpha$, for the Gini index as defined by Qin et al. (2010):
+$$\left\{ \theta|-2R(\theta) \leq \frac{\chi^2_{1;1-\alpha}}{k}\right\}$$
+
+where $$R(\theta)= - \sum_{i \in S} log\{1+\lambda Z(y_i,\theta)\}$$ is
+the log-EL ratio statistic for $\theta = G$,
+$$Z(y_i,\theta)=\{2\widehat{F}_{n}(y_i)-1\}y_{i} - \theta y_i,$$
+$\lambda$ is the solution to
+$$ \frac{1}{n}\sum_{i \in S}\frac{Z(y_i,\theta)}{1+Z(y_i,\theta)}=0,$$
+$k=\widehat{\sigma}_{2}^{2}/\widehat{\sigma}_{1}^{2}$ is the scaling
+factor,
+$$ \widehat{\sigma}_{j}^{2}=\frac{1}{n-1}\sum_{i \in S}\left(u_{ji} - \overline{u}_{j} \right)^2,$$
+with $j=\{1,2\}$,
+$$ \overline{u}_{j} = \frac{1}{n}\sum_{i \in S}u_{ji},$$ and
+$\chi^2_{1;1-\alpha}$ is the $(1-\alpha)$th quantile of Chi-Squared
+distribution with one degree of freedom. 
+
+
+
+
+```{r}
+
+# Gini index estimation and confidence interval using 'ELchisq'.
+
+igini(y, interval = "ELchisq")
+
+```
+
+
+`interval = "ELboot"` substitutes the critical value based on the Chi-Squared 
+distribution by an empirical critical value based on bootstrap. `"ELboot"` 
+computes the $EL$ confidence interval (Qin et al., 2010):
+$$\left\{ \theta|-2R(\theta) \leq C_{1-\alpha}\right\},$$ where
+$C_{1-\alpha}$ is the $(1-\alpha)$th quantile of the values
+$\{-R_{1}^{*}(\widehat{G}),\ldots, -R_{B}^{*}(\widehat{G})\}$, and where
+$R_{b}^{*}(\widehat{G})$ denotes the value of $R(\theta)$ computed from
+the $b$th bootstrap sample.
+
+
+
+
+```{r}
+
+# Gini index estimation and confidence interval using 'ELboot'.
+
+igini(y, interval = "ELboot")
+
+```
+
+
+The function *icompareCI()* compares the various confidence intervals for the scenario of a sample derived from an infinite population. The argument `plotCI = TRUE` plots the results derived from the various available methods for constructing confidence intervals. 
+
+
+
+```{r}
+
+# Comparisons of variance estimators and confidence intervals.
+
+icompareCI(y, plotCI = FALSE)
+
+```
+
+
+
+# Finite populations
+
+## Estimators of the Gini index
+
+For a finite population $U$, $\{Y_{i}: i\in U\}$ denotes a sequence,
+with size $N$, of nonnegative random variables with the same
+distribution as the variable of interest $Y$, and $\{y_{i}: i\in U\}$
+are the population values of the variable of interest. A sample $S$ is
+selected from $U$ by using a sampling design with survey weights
+$w_i$, with $i\in S$. For example, the survey weights can be  $w_i = \pi_{i}^{-1}$, where $\pi_{i}=P(i\in S)$ are the
+inclusion probabilities (Muñoz et al., 2023). The Gini index ($G$) is
+estimated using the observations of individuals selected in the sample
+$\{y_{i}: i\in S\}$, and the corresponding survey weights
+$\{w_{i}: i\in S\}$. The different methods for estimating the Gini index are (see also Muñoz et al., 2023):
+
+- `method = 1` (Langel and Tillé, 2013).
+
+$$\widehat{G}_{w1}= \displaystyle \frac{1}{2\widehat{N}^{2}\overline{y}_{w}}\sum_{i \in S}\sum_{j \in S}w_{i}w_{j}|y_{i}-y_{j}|,$$
+where $\widehat{N}=\sum_{i \in S}w_i$ and 
+$$\overline{y}_{w}= \frac{1}{\widehat{N}}\sum_{i \in S}w_{i}y_{i}.$$
+
+- `method = 2` (Alfons and Templ, 2012; Langel and Tillé, 2013).
+
+$$\widehat{G}_{w2} =\displaystyle \frac{2\sum_{i \in S}w_{(i)}^{+}\widehat{N}_{(i)}y_{(i)} -\sum_{i \in S}w_{i}^{2}y_{i}  }{\widehat{N}^{2}\overline{y}_{w}}-1,$$
+where $y_{(i)}$ are the values $y_i$ sorted in increasing order, $w_{(i)}^{+}$ are the values $w_i$ sorted according to the increasing order of the values $y_i$, and $\widehat{N}_{(i)}=\sum_{j=1}^{i}w_{(j)}^{+}$. Note that Langel and Tillé (2013) show that $\widehat{G}_{w1}=\widehat{G}_{w2}$.
+
+
+- `method = 3` (Berger, 2008).
+
+$$\widehat{G}_{w3} = \displaystyle \frac{2}{\widehat{N}\overline{y}_{w}}\sum_{i \in S}w_{i}y_{i}\widehat{F}_{w}^{\ast}(y_{i})-1, $$
+where
+$$\widehat{F}_{w}^{\ast}(t) = \displaystyle \frac{1}{\widehat{N}}\sum_{i \in S}w_{i}[\delta(y_i < t) + 0.5\delta(y_i = t)]$$
+is the smooth (mid-point) distribution function.
+
+
+
+- `method = 4` (Berger and Gedik-Balay, 2020).
+
+$$\widehat{G}_{w4} = 1 - \displaystyle \frac{\overline{v}_{w}}{\overline{y}_{w}},$$
+where $\overline{v}_{w}=\widehat{N}^{-1}\sum_{i \in S}w_{i}v_{i}$ and
+$$v_{i} = \displaystyle \frac{1}{\widehat{N} - w_{i}}\sum_{ \substack{j \in S\\ j\neq i}}\min(y_{i},y_{j}).$$
+
+
+- `method = 5` (Lerman and Yitzhaki, 1989).
+
+$$\widehat{G}_{w5} = \displaystyle \frac{2}{\widehat{N}\overline{y}_{w}} \sum_{i \in S} w_{(i)}^{+}[y_{(i)} - \overline{y}_{w}]\left[ \widehat{F}_{w}^{LY}(y_{(i)}) - \overline{F}_{w}^{LY} \right], $$
+where
+$$\widehat{F}_{w}^{LY}(y_{(i)}) = \displaystyle \frac{1}{\widehat{N}}\left(\widehat{N}_{(i-1)} + \frac{w_{(i)}^{+}}{2} \right)$$
+and $$\overline{F}_{w}^{LY}=\frac{1}{\widehat{N}}\sum_{i \in S}w_{(i)}^{+}\widehat{F}_{w}^{LY}(y_{(i)}).$$
+
+
+
+In the finite population example, income and weights from the 2006 Austrian EU-SILC data set (**laeken** package) are used to estimate the Gini index in the Austrian region of
+Burgenland. The Gini index is estimated using *fgini()* and `method = 2` (the default method).
+ 
+
+```{r}
+data(eusilc, package="laeken")
+y <- eusilc$eqIncome[eusilc$db040 == "Burgenland"]
+w <- eusilc$rb050[eusilc$db040 == "Burgenland"]
+fgini(y, w)
+
+```
+
+
+
+*fginindex()* can be used to estimate the Gini index using various
+estimation methods and both **R** and **C++** codes. Efficiency
+comparisons between both implementations and with other functions available in
+other packages, such as **laeken**, **DescTools**, **ineq** or
+**REAT**, can be made using, for example, the function
+*microbenchmark()*:
+  
+
+
+  
+```{r}
+
+#Comparing the computation time for the various estimation methods and using R
+microbenchmark::microbenchmark(
+fginindex(y, w, method = 1,  useRcpp = FALSE),
+fginindex(y, w, method = 2,  useRcpp = FALSE),
+fginindex(y, w, method = 3,  useRcpp = FALSE),
+fginindex(y, w, method = 4,  useRcpp = FALSE),
+fginindex(y, w, method = 5,  useRcpp = FALSE)
+)
+
+
+# Comparing the computation time for the various estimation methods and using Rcpp
+microbenchmark::microbenchmark(
+fginindex(y, w, method = 1),
+fginindex(y, w, method = 2),
+fginindex(y, w, method = 3),
+fginindex(y, w, method = 4),
+fginindex(y, w, method = 5)
+)
+
+```
+
+
+```{r}
+
+# Comparing the computation time for estimates of the Gini index in various R packages.
+
+# Comparing 'method = 2', used also by the laeken package. 
+
+microbenchmark::microbenchmark(
+fgini(y,w),
+laeken::gini(y,w)
+)
+
+
+# Comparing 'method = 5', used also by the DescTools and REAT packages. 
+
+microbenchmark::microbenchmark(
+fgini(y,w, method = 5),
+DescTools::Gini(y,w),
+REAT::gini(y, weighting = w)
+)
+
+```
+
+
+
+
+## Variance estimation and confidence intervals
+
+Jackknife and linearization tecniques compute *pseudo-values* (named as $z_{i}$, with $i \in S$) that require the use of an expression for the variance estimation. The function *fgini()* can compute the following type variance estimators using the argument `varformula`:  
+
+1. The Horvitz-Thompson (`"HT"`) type variance estimator (Hortvitz and Thompson, 1952).
+
+$$\widehat{V}_{HT}(\widehat{G}_{w}) = \displaystyle \sum_{i\in S}\sum_{j\in S}\breve{\Delta}_{ij}w_{i}w_{j}z_{i}z_{j},$$
+which is computed when `varformula = "HT"`, where
+$$\breve{\Delta}_{ij}=\displaystyle \frac{\pi_{ij}-\pi_{i}\pi_{j}}{\pi_{ij}}.$$
+
+2. The Sen-Yates-Grundy (`"SYG"`) type variance estimator (Sen, 1953; Yates and Grundy, 1953).
+
+$$\widehat{V}_{SYG}(\widehat{G}_{w}) = - \displaystyle \frac{1}{2}\sum_{i\in S}\sum_{j\in S}\breve{\Delta}_{ij}(w_{i}z_i-w_{j}z_{j})^{2},$$
+which is computed when `varformula = "SYG"`.
+
+
+3. The Hartley-Rao (`"HR"`) type variance estimator (Hartley and Rao, 1962).
+
+$$\widehat{V}_{HR}(\widehat{G}_{w}) = \displaystyle \frac{1}{n-1}\sum_{i\in S}\sum_{\substack{j \in S\\ j < i}}\left(1-\pi_i-\pi_j + \frac{1}{n}\sum_{k\in U}\pi_{k}^{2} \right)(w_{i}z_i-w_{j}z_{j})^{2},$$
+which is computed when `varformula = "HR"`. 
+
+Note that the `"HT"` variance estimator may give negative values, and the `"SYG"` variance estimator is suitable for fixed-size sampling designs. This implies that `"SYG"` should not be used under Poisson sampling. Fortunately, `"HT"` always give positive values under this sampling design. We observe that both Horvitz-Thompson and Sen-Yates-Grundy variance estimators depend on second (joint) inclusion probabilities (argument `Pij`). The Hàjek (1964) approximation
+$$\pi_{ij}\cong \pi_{i}\pi_{j}\left[1- \displaystyle \frac{(1-\pi_{i})(1-\pi_{j})}{\sum_{i \in S}(1-\pi_{i})} \right]$$
+is used when the second (joint) inclusion probabilities are not available (`Pij = NULL`). Note that the Hàjek approximation is suggested for large-entropy sampling designs, large samples, and large populations (see Tille 2006; Berger and Tille, 2009; Haziza et al., 2008; Berger, 2011). For instance, this approximation is not recomended for highly-stratified samples (Berger, 2005). The Hartley-Rao variance estimator requires the first inclusion probabilities at the population level (argument `PiU`).
+
+### Bootstrap
+
+For complex sampling designs, the rescaled bootstrap (Rao el al., 1992; Rust and Rao, 1996) can be used for variance estimation and construction of confidence intervals. `interval = "pbootstrap"` returns the confidence interval for the Gini index using the rescaled bootstrap with confidence limits obtained by the percentile method. For a given estimator $\widehat{G}_{w}$ and a confidence level $1-\alpha$, this confidence interval is given by 
+$$\left[ \widehat{G}^{*}_{w;\alpha/2}, \widehat{G}^{*}_{w;1-\alpha/2}   \right],$$
+
+where $\widehat{G}^{*}_{w;a}$ is the $a$th quantile of the bootstrapped coefficients $\widehat{G}^{*}_{w}(b)$,  with $b=\{1,\ldots,B\}$, and which are obtained by using the expression $\widehat{G}_{w}$ after substituting the original survey weights $w_{i}$ by the bootstrap weights
+$$w_{i}^{*}(b)=w_{i}\frac{r_{i}n}{n-1},$$
+where $r_{i}$ is the number of times that $i$yh unit is selected by the bootstrap procedure. A variance estimator of the Gini index based on the rescaled bootstrap is defined as:
+$$\widehat{V}_{B}(\widehat{G}_{w})= \displaystyle \frac{1}{B-1}\sum_{b=1}^{B}\left(\widehat{G}^{*}_{w}(b) - \overline{G}^{*}_{w} \right)^2,$$
+where $$\overline{G}^{*}_{w}=\frac{1}{B}\sum_{b=1}^{B}\widehat{G}^{*}_{w}(b).$$
+
+
+```{r}
+
+# Gini index estimation and confidence interval using 'pbootstrap'.
+
+fgini(y, w, interval = "pbootstrap")
+
+```
+
+
+
+### Jackknife
+
+The `"zjackknife"` method computes the variance of the 
+Gini index using the jackknife technique. For a given estimator $\widehat{G}_{w}$, the pseudo-values for variance estimation are defined as (see Berger, 2008):
+$$z_{i}=\displaystyle \frac{1}{w_{i}}\left(1-\frac{w_{i}}{\widehat{N}}\right)\left(\widehat{G}_{w} - \widehat{G}_{w;-i}\right),$$   
+where $\widehat{G}_{w;-i}$ denotes the estimator $\widehat{G}_{w}$ computed from $S\setminus\{i\}$, i.e., from the sample $S$ after removing the $i$th unit. For a confidence level $1-\alpha$, the
+`"zjackknife"` confidence interval is defined as
+$$\left[\widehat{G}_{w} - Z_{1-\alpha/2}\sqrt{\widehat{V}(\widehat{G}_{w})},  \widehat{G}_{w} + Z_{1-\alpha/2}\sqrt{\widehat{V}(\widehat{G}_{w})}   \right],$$
+where the variance $\widehat{V}(\widehat{G}_{w})$ is computed using the pseudo-values $z_i$ and any of the aforementioned type variance estimators (Horvitz-Thompson; Sen-Yates-Grundy; or Harley-Rao).  
+
+
+
+
+```{r}
+
+# Gini index estimation and confidence interval using 'zjackknife'.
+
+fgini(y, w, interval = "zjackknife")
+
+```
+
+
+
+
+### Linearization
+
+
+The linearization technique for variance estimation (Deville, 1999) has been applied to the following estimators of the Gini index:
+$$\widehat{G}_{w}^{a}= \displaystyle \frac{1}{2\widehat{N}^{2}\overline{y}_{w}}\sum_{i \in S}\sum_{j \in S}w_{i}w_{j}|y_{i}-y_{j}|,$$
+
+and 
+$$\widehat{G}_{w}^{b} = \displaystyle \frac{2}{\widehat{N}\overline{y}_{w}}\sum_{i \in S}w_{i}y_{i}\widehat{F}_{w}(y_{i})-1, $$
+
+where 
+$$\widehat{F}_{w}(t)=\frac{1}{\widehat{N}}\sum_{i \in S}w_i\delta(y_i \leq t)$$
+For a given estimator $\widehat{G}_w$ and a linearizated variable $z$, the confidence interval, with confidence level $1-\alpha$, is defined as   
+$$\left[\widehat{G}_w - Z_{1-\alpha/2}\sqrt{\widehat{V}(\widehat{G}_w)},  \widehat{G}_w + Z_{1-\alpha/2}\sqrt{\widehat{V}(\widehat{G}_w)}   \right],$$
+
+where the variance $\widehat{V}(\widehat{G}_w)$ is computed using the corresponding pseudo-values  and  any of the aforementioned type variance estimators (Horvitz-Thompson; Sen-Yates-Grundy, or Harley-Rao).
+
+
+On the one hand, `interval = "zalinearization"` linearizates the estimator $\widehat{G}_{w}^{a}$, and the corresponding pseudo-values are defined as (Langel anf Tillé 2013):
+
+$$z_{(i)}^{a}=\frac{1}{\widehat{N}^{2}\overline{y}_w}\left[ 2\widehat{N}_{(i)}\left( y_{(i)} - \widehat{\overline{Y}}_{(i)}\right) + \widehat{N}\left\{ \overline{y}_{w} -  y_{(i)} -  \widehat{G}_{w}^{a}\left(\overline{y}_{w} + y_{(i)} \right) \right\} \right],$$
+where 
+$$\widehat{\overline{Y}}_{(i)} = \displaystyle \frac{1}{\widehat{N}_{(i)}}\sum_{j=1}^{i}w_{(j)}^{+}y_{(j)}.$$
+
+On the other hand, `interval = "zblinearization"` linearizates the estimator $\widehat{G}_{w}^{b}$, and the corresponding pseudo values are (see Berger, 2008):
+
+$$z_i^{b}=\frac{1}{\hat{N}\overline{y}_{w}}\left[ 2y_i\widehat{F}_{w}(y_i) - (\widehat{G}_{w}^{b}+1)(y_i+\overline{y}_{w})+\frac{2}{\hat{N}}\sum_{j \in S}w_jy_j\delta(y_j \geq y_i)  \right],$$
+where 
+$$\widehat{F}_{w}(t) = \displaystyle \frac{1}{\widehat{N}}\sum_{i \in S}w_{i}\delta(y_i \leq t).$$
+
+
+
+
+```{r}
+
+# Gini index estimation and confidence interval using:
+ ## a: The method 2 for point estimation. 
+ ## b: The method 'zalinearization' for variance estimation. 
+ ## c: The Sen-Yates-Grundy type variance estimator. 
+ ## d: The Hàjek approximation for the joint inclusion probabilities. 
+fgini(y, w, interval = "zalinearization")
+
+# Gini index estimation and confidence interval using:
+ ## a: The method 3 for point estimation. 
+ ## b: The method 'zblinearization' for variance estimation. 
+ ## c: The Sen-Yates-Grundy type variance estimator. 
+ ## d: The Hàjek approximation for the joint inclusion probabilities. 
+fgini(y, w, method = 3, interval = "zblinearization")
+
+```
+
+
+
+# References
+
+Alfons, A., and Templ, M. (2012). Estimation of social exclusion
+indicators from complex surveys: The R package laeken. KU Leuven,
+Faculty of Business and Economics Working Paper.
+
+Berger, Y. G. (2005). Variance estimation with highly stratified sampling designs with unequal probabilities. *Australian & New Zealand Journal of Statistics*, 47, 365–373.
+
+Berger, Y. G. (2008). A note on the asymptotic equivalence of jackknife
+and linearization variance estimation for the Gini Coefficient. *Journal of Official Statistics*, 24(4), 541-555.
+
+Berger, Y. G. (2011). Asymptotic consistency under large entropy sampling designs with unequal probabilities. *Pakistan Journal of Statistics*, 27, 407–426.
+
+Berger, Y. G. and Tille, Y. (2009). Sampling with unequal probabilities. In Sample Surveys: Design, Methods and Applications (eds. D. Pfeffermann and C. R. Rao), 39–54. Elsevier, Amsterdam
+
+Berger, Y., and Gedik Balay, İ. (2020). Confidence intervals of Gini
+coefficient under unequal probability sampling. *Journal of Official Statistics*, 36(2), 237-249.
+
+
+David, H.A. (1968). Gini's mean difference rediscovered. *Biometrika*,
+55, 573--575.
+
+Davison, A. C., and Hinkley, D. V. (1997). *Bootstrap Methods and Their Application* (Cambridge Series in Statistical and Probabilistic
+Mathematics, No 1)--Cambridge University Press.
+
+Deville, J.C. (1999). Variance Estimation for Complex Statistics and
+Estimators: Linearization and Residual Techniques. *Survey Methodology*,
+25, 193--203.
+
+Deltas, G. (2003). The small-sample bias of the Gini coefficient:
+results and implications for empirical research. *Review of Economics and Statistics*, 85(1), 226-234.
+
+Giorgi, G. M., and Gigliarano, C. (2017). The Gini concentration index:
+a review of the inference literature. *Journal of Economic Surveys*,
+31(4), 1130-1148.
+
+Hàjek, J. (1964). Asymptotic theory of rejective sampling with varying probabilities from a finite population. *The Annals of Mathematical Statistics*, 35, 4, 1491–1523.
+
+Hartley, H. O., and Rao, J. N. K. (1962). Sampling with unequal probabilities and without replacement. *The Annals of Mathematical Statistics*, 350-374.
+
+Haziza, D., Mecatti, F. and Rao, J. N. K. (2008). Evaluation of some approximate variance estimators under the Rao-Sampford unequal probability sampling design. *Metron*, LXVI, 91–108.
+
+
+Horvitz, D. G. and Thompson, D. J. (1952). A generalization of sampling without replacement from a finite universe. *Journal of the American Statistical Association*, 47, 663–685.
+
+Kendall, M., and Stuart, A. (1977). *The advanced theory of statistics. Vol. 1: Distribution Theory*. London: Griffin.
+
+
+Langel, M., and Tillé, Y. (2013). Variance estimation of the Gini index:
+revisiting a result several times published. *Journal of the Royal Statistical Society: Series A (Statistics in Society)*, 176(2), 521-540.
+
+Lerman, R. I., and Yitzhaki, S. (1989). Improving the accuracy of estimates of Gini coefficients. *Journal of econometrics*, 42(1), 43-47.
+
+
+Muñoz, J. F., Moya-Fernández, P. J., and Álvarez-Verdejo, E. (2023).
+Exploring and Correcting the Bias in the Estimation of the Gini Measure
+of Inequality. *Sociological Methods & Research*.
+<https://doi.org/10.1177/00491241231176847>
+
+
+
+Ogwang, T. (2000). A convenient method of computing the Gini index and its standard error. *Oxford Bulletin of Economics and Statistics*, 62(1), 123-123.
+
+
+Owen, A. B. (2001). *Empirical likelihood*. CRC press.
+
+
+Qin, Y., Rao, J. N. K., and Wu, C. (2010). Empirical likelihood confidence intervals for the Gini measure of income inequality. *Economic Modelling*, 27(6), 1429-1435.
+
+Rao, J. N. K., Wu, C. F. J., and Yue, K. (1992). Some recent work on resampling methods for complex surveys. *Survey methodology*, 18(2), 209-217.
+
+
+Rust, K. F., and Rao, J. N. K. (1996). Variance estimation for complex surveys using replication techniques. *Statistical methods in medical research*, 5(3), 283-310.
+
+Sen, A. R. (1953). On the estimate of the variance in sampling with varying probabilities. *Journal of the Indian Society of Agricultural Statistics*, 5, 119–127.
+
+Tillé, Y. (2006). *Sampling Algorithms*. Springer, New York.
+
+Yates, F., and Grundy, P. M. (1953). Selection without replacement from within strata with probability proportional to size. *Journal of the Royal Statistical Society B*, 15, 253–261.
